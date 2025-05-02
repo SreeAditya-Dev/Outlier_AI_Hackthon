@@ -1,1 +1,1 @@
-# -Outlier_AI_Hackthon
+# Outlier_AI_Hackthon
