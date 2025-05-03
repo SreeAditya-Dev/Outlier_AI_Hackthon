@@ -2,7 +2,6 @@
 # Last Mile - Freight Route Optimization Platform
 
 Last Mile is an intelligent route optimization platform designed specifically for logistics and freight transportation in India. The application provides real-time route planning and optimization for cargo transport, helping companies save time, fuel, and money.
-
 ---
 ## Live Link : https://lastmile0.netlify.app/
 
