@@ -9,6 +9,7 @@ import { AnimatedTestimonials } from '@/components/ui/animated-testimonials';
 import { MacbookScroll } from '@/components/ui/macbook-scroll';
 import { FeatureCard } from '@/components/ui/feature-card';
 import { useTheme } from '@/context/ThemeContext';
+import { ResizableNavbar } from '@/components/ResizableNavbar';
 
 const HomePage = () => {
   const { theme } = useTheme();
@@ -74,6 +75,9 @@ const HomePage = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
+      {/* Resizable Navbar */}
+      <ResizableNavbar />
+
       {/* Hero Section */}
       <section className="pt-6 md:pt-8 pb-6 md:pb-12 px-4 relative transition-colors duration-300">
         <div className="absolute inset-0 bg-[radial-gradient(125%_125%_at_50%_10%,rgba(255,255,255,0)_40%,rgba(102,51,238,1)_100%)] dark:opacity-80"></div>
