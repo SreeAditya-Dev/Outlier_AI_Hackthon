@@ -7,12 +7,11 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: mode === 'development' ? 8080 : parseInt(process.env.PORT || '5173'),
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -20,3 +19,4 @@ export default defineConfig(({ mode }) => ({
     },
   },
 }));
+
