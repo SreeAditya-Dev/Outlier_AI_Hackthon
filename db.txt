@@ -1,0 +1,297 @@
+-- Enable extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create enum types
+CREATE TYPE vehicle_type AS ENUM ('LORRY', 'TRUCK', 'TEN_WHEELER', 'FOURTEEN_WHEELER', 'OTHER');
+CREATE TYPE road_type AS ENUM ('NATIONAL_HIGHWAY', 'STATE_HIGHWAY', 'RURAL', 'URBAN', 'EXPRESSWAY');
+CREATE TYPE route_status AS ENUM ('PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED');
+
+-- Organizations (for multi-tenancy)
+CREATE TABLE organizations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    address TEXT,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    contact_email TEXT NOT NULL,
+    contact_phone TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User profiles (linked to Supabase auth)
+CREATE TABLE user_profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id),
+    organization_id UUID REFERENCES organizations(id),
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    role TEXT NOT NULL, -- admin, dispatcher, driver
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Vehicles
+CREATE TABLE vehicles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    registration_number TEXT NOT NULL UNIQUE,
+    type vehicle_type NOT NULL,
+    max_weight DECIMAL(10,2) NOT NULL, -- tons
+    capacity_volume DECIMAL(10,2), -- cubic meters
+    fuel_type TEXT DEFAULT 'Diesel',
+    status TEXT, -- Available, In Maintenance, On Route
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Locations (warehouses, customers, toll plazas)
+CREATE TABLE locations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    name TEXT NOT NULL,
+    address TEXT,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    latitude DECIMAL(10,8),
+    longitude DECIMAL(11,8),
+    is_toll_plaza BOOLEAN DEFAULT FALSE,
+    is_warehouse BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Routes (main planning table)
+CREATE TABLE routes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    user_id UUID REFERENCES user_profiles(id),
+    origin_id UUID REFERENCES locations(id),
+    destination_id UUID REFERENCES locations(id),
+    vehicle_id UUID REFERENCES vehicles(id),
+    cargo_weight DECIMAL(8,2),
+    cargo_type TEXT,
+    distance_km DECIMAL(8,2),
+    estimated_time_mins INTEGER,
+    status route_status DEFAULT 'PLANNED',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Route stops (waypoints)
+CREATE TABLE route_stops (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    route_id UUID REFERENCES routes(id) ON DELETE CASCADE,
+    location_id UUID REFERENCES locations(id),
+    sequence_number INTEGER NOT NULL,
+    arrival_time TIMESTAMPTZ,
+    departure_time TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Toll plazas
+CREATE TABLE toll_plazas (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    location_id UUID REFERENCES locations(id),
+    name TEXT NOT NULL,
+    highway_name TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Toll rates
+CREATE TABLE toll_rates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    toll_plaza_id UUID REFERENCES toll_plazas(id),
+    vehicle_type vehicle_type NOT NULL,
+    rate DECIMAL(8,2) NOT NULL, -- INR
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Route tolls (junction table)
+CREATE TABLE route_tolls (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    route_id UUID REFERENCES routes(id) ON DELETE CASCADE,
+    toll_plaza_id UUID REFERENCES toll_plazas(id),
+    toll_rate_id UUID REFERENCES toll_rates(id),
+    amount DECIMAL(8,2) NOT NULL,
+    passed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trips (actual executions)
+CREATE TABLE trips (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    route_id UUID REFERENCES routes(id),
+    vehicle_id UUID REFERENCES vehicles(id),
+    driver_id UUID REFERENCES user_profiles(id),
+    start_time TIMESTAMPTZ,
+    end_time TIMESTAMPTZ,
+    actual_distance_km DECIMAL(8,2),
+    fuel_used_liters DECIMAL(8,2),
+    status TEXT, -- Completed, Cancelled, In Progress
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Trip updates (tracking)
+CREATE TABLE trip_updates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    trip_id UUID REFERENCES trips(id) ON DELETE CASCADE,
+    location_id UUID REFERENCES locations(id),
+    recorded_at TIMESTAMPTZ DEFAULT NOW(),
+    odometer_km DECIMAL(8,2),
+    fuel_level DECIMAL(5,2), -- percentage
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Vehicle maintenance
+CREATE TABLE vehicle_maintenance (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    vehicle_id UUID REFERENCES vehicles(id) ON DELETE CASCADE,
+    maintenance_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    cost DECIMAL(10,2),
+    start_date TIMESTAMPTZ,
+    end_date TIMESTAMPTZ,
+    notes TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Driver logs (compliance)
+CREATE TABLE driver_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    driver_id UUID REFERENCES user_profiles(id),
+    vehicle_id UUID REFERENCES vehicles(id),
+    start_time TIMESTAMPTZ NOT NULL,
+    end_time TIMESTAMPTZ,
+    start_odometer DECIMAL(8,2),
+    end_odometer DECIMAL(8,2),
+    status TEXT, -- Driving, On Duty, Off Duty
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Travel history table to track completed trips
+CREATE TABLE travel_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id),
+    user_id UUID REFERENCES user_profiles(id),
+    route_id UUID REFERENCES routes(id),
+    vehicle_id UUID REFERENCES vehicles(id),
+    
+    -- Planned vs actual metrics
+    planned_start_time TIMESTAMPTZ,
+    planned_end_time TIMESTAMPTZ,
+    actual_start_time TIMESTAMPTZ NOT NULL,
+    actual_end_time TIMESTAMPTZ,
+    
+    -- Distance metrics
+    planned_distance DECIMAL(8,2), -- in kilometers
+    actual_distance DECIMAL(8,2), -- in kilometers
+    
+    -- Cost metrics
+    planned_fuel_cost DECIMAL(10,2), -- in rupees
+    actual_fuel_cost DECIMAL(10,2), -- in rupees
+    planned_toll_cost DECIMAL(10,2), -- in rupees
+    actual_toll_cost DECIMAL(10,2), -- in rupees
+    fuel_consumed DECIMAL(8,2), -- in liters
+    
+    -- Location references (denormalized for easier querying)
+    origin_id UUID REFERENCES locations(id),
+    destination_id UUID REFERENCES locations(id),
+    
+    -- Performance metrics
+    average_speed DECIMAL(6,2), -- in km/h
+    max_speed DECIMAL(6,2), -- in km/h
+    
+    -- Status and metadata
+    status TEXT NOT NULL, -- COMPLETED, CANCELLED, DELAYED
+    delay_minutes INTEGER,
+    delay_reason TEXT,
+    notes TEXT,
+    
+    -- User feedback
+    rating INTEGER CHECK (rating BETWEEN 1 AND 5), -- 1-5 star rating
+    feedback TEXT,
+    
+    -- Timestamps
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_travel_history_org ON travel_history(organization_id);
+CREATE INDEX idx_travel_history_user ON travel_history(user_id);
+CREATE INDEX idx_travel_history_route ON travel_history(route_id);
+CREATE INDEX idx_travel_history_dates ON travel_history(actual_start_time, actual_end_time);
+CREATE INDEX idx_travel_history_locations ON travel_history(origin_id, destination_id);
+
+-- Enable Row Level Security
+ALTER TABLE travel_history ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policy
+CREATE POLICY "Users can access their organization's travel history" 
+ON travel_history
+FOR SELECT
+USING (
+    organization_id = (
+        SELECT organization_id FROM user_profiles 
+        WHERE user_profiles.id = auth.uid()
+    )
+);
+
+-- Add timestamp update trigger
+CREATE TRIGGER update_travel_history_timestamp 
+BEFORE UPDATE ON travel_history
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+-- Indexes for performance
+CREATE INDEX idx_vehicles_org ON vehicles(organization_id);
+CREATE INDEX idx_routes_org ON routes(organization_id);
+CREATE INDEX idx_trips_route ON trips(route_id);
+CREATE INDEX idx_trip_updates_trip ON trip_updates(trip_id);
+CREATE INDEX idx_locations_coords ON locations(latitude, longitude);
+
+-- RLS Policies
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE trips ENABLE ROW LEVEL SECURITY;
+
+-- Standard policy: Org members can access their org's data
+CREATE POLICY org_access_policy ON organizations
+    USING (EXISTS (
+        SELECT 1 FROM user_profiles 
+        WHERE user_profiles.organization_id = organizations.id 
+        AND user_profiles.id = auth.uid()
+    ));
+
+-- Timestamp update function
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply triggers to tables with updated_at
+CREATE TRIGGER update_org_timestamp BEFORE UPDATE ON organizations
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER update_user_profile_timestamp BEFORE UPDATE ON user_profiles
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER update_vehicle_timestamp BEFORE UPDATE ON vehicles
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER update_route_timestamp BEFORE UPDATE ON routes
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
+
+CREATE TRIGGER update_trip_timestamp BEFORE UPDATE ON trips
+FOR EACH ROW EXECUTE FUNCTION update_timestamp();
