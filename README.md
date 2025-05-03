@@ -6,7 +6,7 @@ Last Mile is an intelligent route optimization platform designed specifically fo
 ---
 ## Live Link : https://lastmile0.netlify.app/
 
-## DEMO VIDEO OF PROTOTYPE : https://ssneduin-my.sharepoint.com/:v:/g/personal/sreeaditya24110041_snuchennai_edu_in/EbH7qxu05MVIhRg5mQs2JlcBmihEBp0P3LTWlkg778TipA?e=2DeJN6
+## DEMO VIDEO OF PROTOTYPE : https://ssneduin-my.sharepoint.com/:v:/g/personal/sreeaditya24110041_snuchennai_edu_in/EWMmXVJ9x_lLrKcThac8FPMB3_iVo9_eGPom86_oYiyFsg?e=nV13lM&nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbFZpZXciOiJTaGFyZURpYWxvZy1MaW5rIiwicmVmZXJyYWxBcHBQbGF0Zm9ybSI6IldlYiIsInJlZmVycmFsTW9kZSI6InZpZXcifX0%3D
 
 ## PPT Link : https://ssneduin-my.sharepoint.com/:p:/g/personal/sreeaditya24110041_snuchennai_edu_in/ESIwNsuQmYZNpKsBIc0_j_0BXd96nJaNCmVZxxWseY5T-g?e=d4HKzv
 
